@@ -1,32 +1,19 @@
 import express from "express";
-import {
-  getUserProfile,
-  updateUserProfile,
-  updatePassword,
-  getUsers,
-  getUserById,
-  updateUser,
-  deleteUser,
-} from "../controllers/userController.js";
-import { protect, admin } from "../middlewares/authMiddleware.js";
+import { registerUser, loginUser } from "../controllers/authController.js";
 
 const router = express.Router();
 
-// User Self Profile Routes (Protected)
-router
-  .route("/profile")
-  .get(protect, getUserProfile)
-  .put(protect, updateUserProfile);
+// ==========================================
+// PUBLIC AUTHENTICATION ROUTES (CRITICAL)
+// ==========================================
+router.post("/register", registerUser);
+router.post("/login", loginUser);
 
-router.put("/change-password", protect, updatePassword);
-
-// Admin Management Routes (Protected + Admin)
-router.route("/").get(protect, admin, getUsers);
-
-router
-  .route("/:id")
-  .get(protect, admin, getUserById)
-  .put(protect, admin, updateUser)
-  .delete(protect, admin, deleteUser);
+// ==========================================
+// COMMENTED OUT UNTIL YOU FIX THE CONTROLLER
+// ==========================================
+// import { protect } from "../middlewares/authMiddleware.js";
+// import { getUserProfile } from "../controllers/authController.js";
+// router.get("/profile", protect, getUserProfile);
 
 export default router;
