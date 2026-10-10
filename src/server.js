@@ -1,6 +1,5 @@
 import express from "express";
 import dotenv from "dotenv";
-import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import connectDB from "./config/db.js";
@@ -19,8 +18,6 @@ import addressRoutes from "./routes/addressRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 
-
-
 import { notFound, errorHandler } from "./middlewares/errorMiddleware.js";
 
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
@@ -31,25 +28,38 @@ connectDB();
 const app = express();
 
 app.use(helmet());
-app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" })); 
+app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
 
-const allowedOrigins = [process.env.FRONTEND_URL || "http://localhost:3000"];
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("CORS policy violation: Origin not allowed"));
-      }
-    },
-    credentials: true,
-  }),
-);
+// --- FOOLPROOF CORS & PREFLIGHT MIDDLEWARE ---
+const allowedOrigins = [
+  "https://exclusiveecommerce.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+  );
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  // Immediately approve and end preflight OPTIONS requests
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
+// ---------------------------------------------
 
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 100, 
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: { message: "Too many requests, please try again after 15 minutes" },
   standardHeaders: true,
   legacyHeaders: false,
@@ -57,7 +67,7 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20, 
+  max: 20,
   message: {
     message: "Too many login/registration attempts, please try again later",
   },
