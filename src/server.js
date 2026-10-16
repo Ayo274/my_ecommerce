@@ -76,9 +76,19 @@ const authLimiter = rateLimit({
 app.use("/api", generalLimiter);
 app.use("/api/auth", authLimiter);
 
+// 1. Health check route for uptime monitors (Placed early for quick response)
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "ok", message: "Server is active" });
+});
+
+// 2. Stripe Webhook requires raw body buffer (MUST be before express.json)
+app.use("/api/payments/webhook", express.raw({ type: "application/json" }));
+
+// 3. Standard body parsers for all other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Route Mappings
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/products", productRoutes);

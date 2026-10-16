@@ -1,10 +1,15 @@
-import axios from "axios";
-import crypto from "crypto";
+import Stripe from "stripe";
 import Order from "../models/order.js";
 
-export const initializePayment = async (req, res) => {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+// @desc    Initialize Stripe Checkout Session for an Order
+// @route   POST /api/payments/create-checkout-session
+// @access  Private
+export const createCheckoutSession = async (req, res) => {
   try {
     const { orderId } = req.body;
+
     const order = await Order.findById(orderId).populate("user", "email name");
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
@@ -12,56 +17,59 @@ export const initializePayment = async (req, res) => {
     if (order.isPaid) {
       return res.status(400).json({ message: "Order is already paid" });
     }
-    const paystackPayload = {
-      email: req.user.email || order.user.email,
-      amount: Math.round(order.totalPrice * 100),
-      reference: `ORD_${order._id}_${Date.now()}`,
+
+    // Map your MERN order items into Stripe line items
+    const lineItems = order.orderItems.map((item) => ({
+      price_data: {
+        currency: "usd", // Change to "ngn" or your preferred currency code if desired
+        product_data: {
+          name: item.name || "E-Commerce Product",
+        },
+        unit_amount: Math.round(item.price * 100), // Stripe expects amounts in cents
+      },
+      quantity: item.quantity,
+    }));
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: lineItems,
+      mode: "payment",
+      customer_email: req.user.email || order.user?.email,
+      success_url: `${process.env.FRONTEND_URL || "https://exclusiveecommerce.vercel.app"}/order/${order._id}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL || "https://exclusiveecommerce.vercel.app"}/cart`,
       metadata: {
         orderId: order._id.toString(),
         userId: req.user._id.toString(),
       },
-      callback_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/order/${order._id}/payment-success`,
-    };
-    const response = await axios.post(
-      "https://api.paystack.co/transaction/initialize",
-      paystackPayload,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
-    res.status(200).json(response.data.data);
-  } catch (error) {
-    res.status(500).json({
-      message: error.response?.data?.message || error.message,
     });
+
+    res.status(200).json({ url: session.url });
+  } catch (error) {
+    console.error("Stripe Session Error:", error);
+    res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Verify Stripe Payment on success return
+// @route   GET /api/payments/verify/:sessionId
+// @access  Private
 export const verifyPayment = async (req, res) => {
   try {
-    const { reference } = req.params;
-    const response = await axios.get(
-      `https://api.paystack.co/transaction/verify/${reference}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-        },
-      },
-    );
-    const { status, data } = response.data;
-    if (status && data.status === "success") {
-      const orderId = data.metadata.orderId;
+    const { sessionId } = req.params;
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (session && session.payment_status === "paid") {
+      const orderId = session.metadata.orderId;
       const order = await Order.findById(orderId);
+
       if (order && !order.isPaid) {
         order.isPaid = true;
         order.paidAt = new Date();
         order.paymentResult = {
-          id: data.id,
-          status: data.status,
-          reference: data.reference,
-          email: data.customer.email,
+          id: session.payment_intent,
+          status: session.payment_status,
+          reference: session.id,
+          email: session.customer_email,
         };
         await order.save();
       }
@@ -69,44 +77,51 @@ export const verifyPayment = async (req, res) => {
         .status(200)
         .json({ message: "Payment verified successfully", order });
     }
+
     res.status(400).json({ message: "Payment verification failed" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-export const handlePaystackWebhook = async (req, res) => {
+
+// @desc    Handle Stripe Webhooks for background fulfillment
+// @route   POST /api/payments/webhook
+// @access  Public
+export const handleStripeWebhook = async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  let event;
+
   try {
-    const hash = crypto
-      .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
-      .update(JSON.stringify(req.body))
-      .digest("hex");
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET,
+    );
+  } catch (err) {
+    console.error(`Webhook signature verification failed: ${err.message}`);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
 
-    if (hash !== req.headers["x-paystack-signature"]) {
-      return res.status(400).send("Invalid signature");
-    }
-    const event = req.body;
+  // Handle successful checkout completion
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const orderId = session.metadata?.orderId;
 
-    if (event.event === "charge.success") {
-      const { metadata, reference, id, customer } = event.data;
-      const orderId = metadata?.orderId;
-
-      if (orderId) {
-        const order = await Order.findById(orderId);
-        if (order && !order.isPaid) {
-          order.isPaid = true;
-          order.paidAt = new Date();
-          order.paymentResult = {
-            id,
-            status: "success",
-            reference,
-            email: customer.email,
-          };
-          await order.save();
-        }
+    if (orderId) {
+      const order = await Order.findById(orderId);
+      if (order && !order.isPaid) {
+        order.isPaid = true;
+        order.paidAt = new Date();
+        order.paymentResult = {
+          id: session.payment_intent,
+          status: "success",
+          reference: session.id,
+          email: session.customer_email || session.customer_details?.email,
+        };
+        await order.save();
       }
     }
-    res.status(200).send("Webhook processed");
-  } catch (error) {
-    res.status(500).send(error.message);
   }
+
+  res.status(200).json({ received: true });
 };

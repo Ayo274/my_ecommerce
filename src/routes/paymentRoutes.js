@@ -1,16 +1,15 @@
 import express from "express";
 import {
-  initializePayment,
+  createCheckoutSession,
   verifyPayment,
-  handlePaystackWebhook,
+  handleStripeWebhook,
 } from "../controllers/paymentController.js";
 import { protect } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/initialize", protect, initializePayment);
-router.get("/verify/:reference", protect, verifyPayment);
-router.post("/webhook", handlePaystackWebhook); 
+router.post("/create-checkout-session", protect, createCheckoutSession);
+router.get("/verify/:sessionId", protect, verifyPayment);
+router.post("/webhook", handleStripeWebhook);
 
 export default router;
-

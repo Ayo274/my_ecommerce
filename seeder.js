@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 import dns from "dns";
 import Product from "./src/models/product.js";
-import Category from "./src/models/category.js"; // Adjust path if category model exists
+import Category from "./src/models/category.js"; 
 import connectDB from "./src/config/db.js";
 
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
@@ -11,9 +11,8 @@ dotenv.config();
 connectDB();
 
 const sampleProducts = [
-  // Flash Sales Products (Items 1-4)
   {
-    title: "HAVIT HV-G92 Gamepad",
+    title: "Small BookSelf",
     slug: "havit-hv-g92-gamepad",
     description:
       "Ergonomic wired USB gaming controller featuring dual vibration rumble feedback.",
@@ -33,7 +32,7 @@ const sampleProducts = [
     countInStock: 15,
   },
   {
-    title: "AK -900 wired keyboard",
+    title: "RGB liquid CPU Cooler",
     slug: "ak-900-wired-keyboard",
     description:
       "Full-size RGB backlit mechanical feel gaming keyboard with anti-ghosting keys.",
@@ -54,7 +53,7 @@ const sampleProducts = [
     countInStock: 8,
   },
   {
-    title: "IPS LCD Gaming Monitor",
+    title: "Gucci duffle bag",
     slug: "ips-lcd-gaming-monitor",
     description:
       "27-inch Full HD IPS gaming monitor with ultra-fast 144Hz refresh rate.",
@@ -74,7 +73,7 @@ const sampleProducts = [
     countInStock: 5,
   },
   {
-    title: "S-Series Comfort Chair",
+    title: "The north coat",
     slug: "s-series-comfort-chair",
     description:
       "High-back ergonomic executive gaming and desk chair with lumbar support.",
@@ -94,9 +93,8 @@ const sampleProducts = [
     countInStock: 20,
   },
 
-  // Best Selling Products (Items 5-8)
   {
-    title: "The north coat",
+    title: "S-Series Comfort Chair",
     slug: "the-north-coat",
     description:
       "All-weather insulated winter jacket designed for extreme outdoor conditions.",
@@ -116,7 +114,7 @@ const sampleProducts = [
     countInStock: 4,
   },
   {
-    title: "Gucci duffle bag",
+    title: "IPS LCD Gaming Monitor",
     slug: "gucci-duffle-bag",
     description:
       "Luxury travel duffle bag crafted with premium canvas and leather detailing.",
@@ -136,7 +134,7 @@ const sampleProducts = [
     countInStock: 12,
   },
   {
-    title: "RGB liquid CPU Cooler",
+    title: "AK -900 wired keyboard",
     slug: "rgb-liquid-cpu-cooler",
     description:
       "All-in-one liquid CPU cooler with customizable RGB lighting and dual fans.",
@@ -156,7 +154,7 @@ const sampleProducts = [
     countInStock: 10,
   },
   {
-    title: "Small BookSelf",
+    title: "HAVIT HV-G92 Gamepad",
     slug: "small-bookself",
     description:
       "Compact multi-tier wooden bookshelf suitable for modern home office spaces.",
@@ -179,10 +177,8 @@ const sampleProducts = [
 
 const importData = async () => {
   try {
-    // 1. Clear existing products
     await Product.deleteMany();
 
-    // 2. Assign valid category reference if required by Mongoose
     let categoryId = new mongoose.Types.ObjectId("64f1a2b3c4d5e6f7a8b9c0d1");
     if (Category) {
       let cat = await Category.findOne();
